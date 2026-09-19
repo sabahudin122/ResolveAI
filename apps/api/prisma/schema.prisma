@@ -1,0 +1,418 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TicketStatus {
+  NEW
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_FOR_EMPLOYEE
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketRelationType {
+  DUPLICATE
+  RELATED
+}
+
+enum AiSuggestionType {
+  TRIAGE
+  RESPONSE
+  KNOWLEDGE_ANSWER
+  SIMILAR_TICKETS
+}
+
+enum AiSuggestionStatus {
+  PENDING_REVIEW
+  APPROVED
+  EDITED
+  REJECTED
+}
+
+enum CommentVisibility {
+  PUBLIC
+  INTERNAL
+  AI_DRAFT
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TICKET_UPDATED
+  COMMENT_ADDED
+  AI_READY
+  SLA_WARNING
+}
+
+model Organization {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  users              User[]
+  roles              Role[]
+  departments        Department[]
+  categories         TicketCategory[]
+  tickets            Ticket[]
+  attachments        Attachment[]
+  knowledgeDocuments KnowledgeDocument[]
+  notifications      Notification[]
+  slaPolicies        SlaPolicy[]
+  auditLogs          AuditLog[]
+  refreshTokens      RefreshToken[]
+  ratings            SatisfactionRating[]
+}
+
+model Role {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  slug           String
+  description    String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+
+  @@unique([organizationId, slug])
+}
+
+model Department {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  name           String
+  code           String
+  description    String?
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  tickets        Ticket[]
+  categories     TicketCategory[]
+  knowledgeDocs  KnowledgeDocument[]
+  slaPolicies    SlaPolicy[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, name])
+}
+
+model User {
+  id                 String               @id @default(uuid()) @db.Uuid
+  organizationId     String               @db.Uuid
+  roleId             String               @db.Uuid
+  departmentId       String?              @db.Uuid
+  fullName           String
+  email              String
+  passwordHash       String
+  title              String?
+  isActive           Boolean              @default(true)
+  totpEnabled        Boolean              @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role               Role                 @relation(fields: [roleId], references: [id])
+  department         Department?          @relation(fields: [departmentId], references: [id])
+  reportedTickets    Ticket[]             @relation("TicketReporter")
+  assignedTickets    Ticket[]             @relation("TicketAgent")
+  comments           TicketComment[]
+  assignments        TicketAssignment[]
+  statusChanges      TicketStatusHistory[]
+  aiSuggestions      AiSuggestion[]
+  notifications      Notification[]
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+  ratings            SatisfactionRating[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, roleId])
+  @@index([organizationId, departmentId])
+}
+
+model TicketCategory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  departmentId   String?      @db.Uuid
+  name           String
+  slug           String
+  description    String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department     Department?  @relation(fields: [departmentId], references: [id])
+  tickets        Ticket[]
+
+  @@unique([organizationId, slug])
+}
+
+model Ticket {
+  id                    String                @id @default(uuid()) @db.Uuid
+  organizationId        String                @db.Uuid
+  number                String
+  title                 String
+  description           String
+  status                TicketStatus          @default(NEW)
+  priority              Priority              @default(MEDIUM)
+  categoryId            String?               @db.Uuid
+  departmentId          String?               @db.Uuid
+  reporterId            String                @db.Uuid
+  assignedAgentId       String?               @db.Uuid
+  slaDeadlineAt         DateTime?
+  firstResponseAt       DateTime?
+  resolvedAt            DateTime?
+  aiSummary             String?
+  aiConfidence          Decimal?              @db.Decimal(4, 3)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category              TicketCategory?       @relation(fields: [categoryId], references: [id])
+  department            Department?           @relation(fields: [departmentId], references: [id])
+  reporter              User                  @relation("TicketReporter", fields: [reporterId], references: [id])
+  assignedAgent         User?                 @relation("TicketAgent", fields: [assignedAgentId], references: [id])
+  comments              TicketComment[]
+  assignments           TicketAssignment[]
+  statusHistory         TicketStatusHistory[]
+  attachments           Attachment[]
+  aiSuggestions         AiSuggestion[]
+  relatedFrom           RelatedTicket[]       @relation("RelatedFrom")
+  relatedTo             RelatedTicket[]       @relation("RelatedTo")
+  notifications         Notification[]
+  ratings               SatisfactionRating[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+  @@index([organizationId, reporterId])
+  @@index([organizationId, assignedAgentId])
+}
+
+model TicketComment {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  ticketId       String            @db.Uuid
+  authorId       String            @db.Uuid
+  body           String
+  visibility     CommentVisibility @default(PUBLIC)
+  createdAt      DateTime          @default(now())
+  ticket         Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author         User              @relation(fields: [authorId], references: [id])
+
+  @@index([organizationId, ticketId])
+}
+
+model TicketAssignment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  ticketId       String   @db.Uuid
+  agentId        String   @db.Uuid
+  assignedById   String?  @db.Uuid
+  assignedAt     DateTime @default(now())
+  unassignedAt   DateTime?
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agent          User     @relation(fields: [agentId], references: [id])
+
+  @@index([organizationId, ticketId])
+  @@index([organizationId, agentId])
+}
+
+model TicketStatusHistory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  ticketId       String       @db.Uuid
+  changedById    String       @db.Uuid
+  previousStatus TicketStatus?
+  newStatus      TicketStatus
+  reason         String?
+  changedAt      DateTime     @default(now())
+  ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  changedBy      User         @relation(fields: [changedById], references: [id])
+
+  @@index([organizationId, ticketId, changedAt])
+}
+
+model Attachment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  ticketId       String?      @db.Uuid
+  uploadedById   String       @db.Uuid
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket         Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, ticketId])
+}
+
+model KnowledgeDocument {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  departmentId   String?              @db.Uuid
+  title          String
+  body           String
+  sourceType     String               @default("manual")
+  isPublished    Boolean              @default(false)
+  createdById    String               @db.Uuid
+  publishedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department     Department?          @relation(fields: [departmentId], references: [id])
+  chunks         KnowledgeChunk[]
+  aiSuggestions  KnowledgeReference[]
+
+  @@index([organizationId, isPublished])
+}
+
+model KnowledgeChunk {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  documentId     String            @db.Uuid
+  heading        String?
+  content        String
+  ordinal        Int
+  document       KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, documentId])
+}
+
+model KnowledgeReference {
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @db.Uuid
+  knowledgeDocumentId String            @db.Uuid
+  aiSuggestionId      String            @db.Uuid
+  excerpt             String
+  relevanceScore      Decimal           @db.Decimal(4, 3)
+  knowledgeDocument   KnowledgeDocument @relation(fields: [knowledgeDocumentId], references: [id], onDelete: Cascade)
+  aiSuggestion        AiSuggestion      @relation(fields: [aiSuggestionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, aiSuggestionId])
+}
+
+model AiSuggestion {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  ticketId       String?             @db.Uuid
+  requestedById  String?             @db.Uuid
+  type           AiSuggestionType
+  status         AiSuggestionStatus  @default(PENDING_REVIEW)
+  model          String
+  mock           Boolean             @default(false)
+  recommendation String
+  confidence     Decimal             @db.Decimal(4, 3)
+  reasoning      String
+  payload        Json
+  reviewedById   String?             @db.Uuid
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  ticket         Ticket?             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  requestedBy    User?               @relation(fields: [requestedById], references: [id])
+  references     KnowledgeReference[]
+
+  @@index([organizationId, ticketId])
+}
+
+model RelatedTicket {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  sourceTicketId String             @db.Uuid
+  targetTicketId String             @db.Uuid
+  relationType   TicketRelationType
+  similarity     Decimal            @db.Decimal(4, 3)
+  markedById     String?            @db.Uuid
+  createdAt      DateTime           @default(now())
+  sourceTicket   Ticket             @relation("RelatedFrom", fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  targetTicket   Ticket             @relation("RelatedTo", fields: [targetTicketId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceTicketId, targetTicketId])
+  @@index([organizationId, sourceTicketId])
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid
+  ticketId       String?          @db.Uuid
+  type           NotificationType
+  title          String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket         Ticket?          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, readAt])
+}
+
+model SlaPolicy {
+  id                  String       @id @default(uuid()) @db.Uuid
+  organizationId      String       @db.Uuid
+  departmentId        String?      @db.Uuid
+  priority            Priority
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  isActive            Boolean      @default(true)
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department          Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([organizationId, departmentId, priority])
+}
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  actorId        String?      @db.Uuid
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?        @relation(fields: [actorId], references: [id])
+
+  @@index([organizationId, action, createdAt])
+}
+
+model SatisfactionRating {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  ticketId       String       @db.Uuid
+  userId         String       @db.Uuid
+  score          Int
+  comment        String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@unique([ticketId, userId])
+}
+
+model RefreshToken {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String       @db.Uuid
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedById   String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, revokedAt])
+}

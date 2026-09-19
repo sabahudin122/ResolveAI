@@ -1,0 +1,82 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpsPilot API",
+    "version": "0.1.0",
+    "description": "Versioned REST API for the OpsPilot AI-assisted internal operations platform."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "security": [],
+        "summary": "Log in with email and password"
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "security": [],
+        "summary": "Rotate a refresh token and receive a new access token"
+      }
+    },
+    "/tickets": {
+      "get": {
+        "summary": "List tickets visible to the authenticated user"
+      },
+      "post": {
+        "summary": "Create a ticket and request AI triage recommendations"
+      }
+    },
+    "/tickets/{id}": {
+      "get": {
+        "summary": "Get a ticket with comments, status history, AI suggestions and related tickets"
+      }
+    },
+    "/tickets/{id}/comments": {
+      "post": {
+        "summary": "Add a public reply or internal note"
+      }
+    },
+    "/tickets/{id}/assign": {
+      "post": {
+        "summary": "Assign a ticket to a support agent"
+      }
+    },
+    "/knowledge": {
+      "get": {
+        "summary": "Search or list knowledge-base documents"
+      },
+      "post": {
+        "summary": "Create a knowledge-base document"
+      }
+    },
+    "/analytics/dashboard": {
+      "get": {
+        "summary": "Get management dashboard metrics"
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "List administrator-only audit events"
+      }
+    }
+  }
+}
