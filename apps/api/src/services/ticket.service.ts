@@ -1,4 +1,4 @@
-import type { Priority, RoleSlug, TicketStatus } from '@opspilot/shared';
+import type { Priority, RoleSlug, TicketQueue, TicketStatus } from '@opspilot/shared';
 import { ApiError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import type { AuthContext } from '../types/express.js';
@@ -22,12 +22,13 @@ type ImproveTicketDraftInput = {
 type TicketFilters = {
   status?: TicketStatus;
   priority?: Priority;
+  assignment: TicketQueue;
   search?: string;
   page: number;
   pageSize: number;
 };
 
-type Actor = Pick<AuthContext, 'userId' | 'organizationId' | 'role' | 'departmentId'>;
+type Actor = Pick<AuthContext, 'userId' | 'organizationId' | 'role' | 'departmentId' | 'fullName'>;
 
 function canAccessAll(role: RoleSlug): boolean {
   return role === 'support_agent' || role === 'manager' || role === 'administrator';
@@ -43,7 +44,11 @@ async function createTicketNumber(organizationId: string): Promise<string> {
   return `OPS-${year}-${String(count + 1).padStart(5, '0')}`;
 }
 
-async function resolveSlaDeadline(organizationId: string, priority: Priority, departmentId?: string | null) {
+async function resolveSlaDeadline(
+  organizationId: string,
+  priority: Priority,
+  departmentId?: string | null,
+) {
   const policy = await prisma.slaPolicy.findFirst({
     where: {
       organizationId,
@@ -110,8 +115,16 @@ export async function createTicket(actor: Actor, input: CreateTicketInput) {
   const number = await createTicketNumber(actor.organizationId);
   const officialPriority: Priority = 'MEDIUM';
   const departmentId = category?.departmentId ?? null;
-  const slaDeadlineAt = await resolveSlaDeadline(actor.organizationId, officialPriority, departmentId);
-  const similarTickets = await findSimilarTickets(actor.organizationId, input.title, input.description);
+  const slaDeadlineAt = await resolveSlaDeadline(
+    actor.organizationId,
+    officialPriority,
+    departmentId,
+  );
+  const similarTickets = await findSimilarTickets(
+    actor.organizationId,
+    input.title,
+    input.description,
+  );
   const knowledgeMatches = await searchKnowledge(
     actor.organizationId,
     `${input.title} ${input.description}`,
@@ -188,7 +201,7 @@ export async function createTicket(actor: Actor, input: CreateTicketInput) {
         })),
       },
     },
-    include: ticketDetailInclude,
+    include: ticketDetailInclude(actor),
   });
 
   if (input.attachmentIds?.length) {
@@ -261,47 +274,56 @@ export async function improveTicketDraft(actor: Actor, input: ImproveTicketDraft
   });
 }
 
-const ticketDetailInclude = {
-  reporter: { select: { id: true, fullName: true, email: true } },
-  assignedAgent: { select: { id: true, fullName: true, email: true } },
-  category: true,
-  department: true,
-  comments: {
-    orderBy: { createdAt: 'asc' as const },
-    include: {
-      author: { select: { id: true, fullName: true, role: { select: { slug: true } } } },
+function ticketDetailInclude(actor: Actor) {
+  return {
+    reporter: { select: { id: true, fullName: true, email: true } },
+    assignedAgent: { select: { id: true, fullName: true, email: true } },
+    category: true,
+    department: true,
+    comments: {
+      where: actor.role === 'employee' ? { visibility: 'PUBLIC' as const } : undefined,
+      orderBy: { createdAt: 'asc' as const },
+      include: {
+        author: { select: { id: true, fullName: true, role: { select: { slug: true } } } },
+      },
     },
-  },
-  statusHistory: {
-    orderBy: { changedAt: 'asc' as const },
-    include: {
-      changedBy: { select: { id: true, fullName: true } },
+    assignments: {
+      orderBy: { assignedAt: 'desc' as const },
+      include: {
+        agent: { select: { id: true, fullName: true, role: { select: { slug: true } } } },
+      },
     },
-  },
-  aiSuggestions: {
-    orderBy: { createdAt: 'desc' as const },
-    include: {
-      references: {
-        include: {
-          knowledgeDocument: { select: { id: true, title: true } },
+    statusHistory: {
+      orderBy: { changedAt: 'asc' as const },
+      include: {
+        changedBy: { select: { id: true, fullName: true } },
+      },
+    },
+    aiSuggestions: {
+      orderBy: { createdAt: 'desc' as const },
+      include: {
+        references: {
+          include: {
+            knowledgeDocument: { select: { id: true, title: true } },
+          },
         },
       },
     },
-  },
-  relatedFrom: {
-    include: {
-      targetTicket: {
-        select: {
-          id: true,
-          number: true,
-          title: true,
-          status: true,
-          priority: true,
+    relatedFrom: {
+      include: {
+        targetTicket: {
+          select: {
+            id: true,
+            number: true,
+            title: true,
+            status: true,
+            priority: true,
+          },
         },
       },
     },
-  },
-};
+  };
+}
 
 export async function listTickets(actor: Actor, filters: TicketFilters) {
   const where = {
@@ -309,6 +331,17 @@ export async function listTickets(actor: Actor, filters: TicketFilters) {
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(canAccessAll(actor.role) ? {} : { reporterId: actor.userId }),
+    ...(canAccessAll(actor.role) && filters.assignment === 'available'
+      ? {
+          assignedAgentId: null,
+          ...(filters.status
+            ? {}
+            : { status: { notIn: ['RESOLVED', 'CLOSED'] as TicketStatus[] } }),
+        }
+      : {}),
+    ...(canAccessAll(actor.role) && filters.assignment === 'mine'
+      ? { assignedAgentId: actor.userId }
+      : {}),
     ...(actor.role === 'manager' && actor.departmentId ? { departmentId: actor.departmentId } : {}),
     ...(filters.search
       ? {
@@ -351,9 +384,11 @@ export async function getTicket(actor: Actor, ticketId: string) {
       id: ticketId,
       organizationId: actor.organizationId,
       ...(canAccessAll(actor.role) ? {} : { reporterId: actor.userId }),
-      ...(actor.role === 'manager' && actor.departmentId ? { departmentId: actor.departmentId } : {}),
+      ...(actor.role === 'manager' && actor.departmentId
+        ? { departmentId: actor.departmentId }
+        : {}),
     },
-    include: ticketDetailInclude,
+    include: ticketDetailInclude(actor),
   });
 
   if (!ticket) {
@@ -417,36 +452,46 @@ export async function assignTicket(actor: Actor, ticketId: string, agentId: stri
     throw new ApiError(404, 'AGENT_NOT_FOUND', 'Support agent was not found.');
   }
 
-  const newStatus = ticket.status === 'NEW' || ticket.status === 'TRIAGED' ? 'ASSIGNED' : ticket.status;
+  const newStatus = ['NEW', 'TRIAGED', 'REOPENED'].includes(ticket.status)
+    ? 'ASSIGNED'
+    : ticket.status;
+  const assignedAt = new Date();
 
-  await prisma.ticketAssignment.create({
-    data: {
-      organizationId: actor.organizationId,
-      ticketId: ticket.id,
-      agentId,
-      assignedById: actor.userId,
-    },
-  });
+  const updated = await prisma.$transaction(async (transaction) => {
+    await transaction.ticketAssignment.updateMany({
+      where: { ticketId: ticket.id, unassignedAt: null },
+      data: { unassignedAt: assignedAt },
+    });
+    await transaction.ticketAssignment.create({
+      data: {
+        organizationId: actor.organizationId,
+        ticketId: ticket.id,
+        agentId,
+        assignedById: actor.userId,
+        assignedAt,
+      },
+    });
 
-  const updated = await prisma.ticket.update({
-    where: { id: ticket.id },
-    data: {
-      assignedAgentId: agentId,
-      status: newStatus,
-      statusHistory:
-        newStatus !== ticket.status
-          ? {
-              create: {
-                organizationId: actor.organizationId,
-                changedById: actor.userId,
-                previousStatus: ticket.status,
-                newStatus,
-                reason: 'Ticket assigned',
-              },
-            }
-          : undefined,
-    },
-    include: ticketDetailInclude,
+    return transaction.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        assignedAgentId: agentId,
+        status: newStatus,
+        statusHistory:
+          newStatus !== ticket.status
+            ? {
+                create: {
+                  organizationId: actor.organizationId,
+                  changedById: actor.userId,
+                  previousStatus: ticket.status,
+                  newStatus,
+                  reason: `Assigned to ${agent.fullName}`,
+                },
+              }
+            : undefined,
+      },
+      include: ticketDetailInclude(actor),
+    });
   });
 
   await prisma.notification.create({
@@ -470,6 +515,117 @@ export async function assignTicket(actor: Actor, ticketId: string, agentId: stri
   });
 
   return updated;
+}
+
+export async function claimTicket(actor: Actor, ticketId: string) {
+  const ticket = await getTicket(actor, ticketId);
+
+  if (['RESOLVED', 'CLOSED'].includes(ticket.status)) {
+    throw new ApiError(
+      409,
+      'TICKET_NOT_AVAILABLE',
+      'Resolved or closed tickets cannot be claimed.',
+    );
+  }
+
+  if (ticket.assignedAgentId === actor.userId) {
+    return ticket;
+  }
+
+  if (ticket.assignedAgentId) {
+    throw new ApiError(
+      409,
+      'TICKET_ALREADY_ASSIGNED',
+      `This ticket is already assigned to ${ticket.assignedAgent?.fullName ?? 'another team member'}.`,
+    );
+  }
+
+  const newStatus = ['NEW', 'TRIAGED', 'REOPENED'].includes(ticket.status)
+    ? 'ASSIGNED'
+    : ticket.status;
+  const assignedAt = new Date();
+
+  const claimed = await prisma.$transaction(async (transaction) => {
+    const result = await transaction.ticket.updateMany({
+      where: {
+        id: ticket.id,
+        organizationId: actor.organizationId,
+        assignedAgentId: null,
+        status: { notIn: ['RESOLVED', 'CLOSED'] },
+      },
+      data: {
+        assignedAgentId: actor.userId,
+        status: newStatus,
+      },
+    });
+
+    if (result.count === 0) {
+      const current = await transaction.ticket.findUnique({
+        where: { id: ticket.id },
+        include: { assignedAgent: { select: { fullName: true } } },
+      });
+      if (current && ['RESOLVED', 'CLOSED'].includes(current.status)) {
+        throw new ApiError(409, 'TICKET_NOT_AVAILABLE', 'This ticket is no longer available.');
+      }
+      throw new ApiError(
+        409,
+        'TICKET_ALREADY_ASSIGNED',
+        `This ticket was just taken by ${current?.assignedAgent?.fullName ?? 'another team member'}.`,
+      );
+    }
+
+    await transaction.ticketAssignment.create({
+      data: {
+        organizationId: actor.organizationId,
+        ticketId: ticket.id,
+        agentId: actor.userId,
+        assignedById: actor.userId,
+        assignedAt,
+      },
+    });
+
+    if (newStatus !== ticket.status) {
+      await transaction.ticketStatusHistory.create({
+        data: {
+          organizationId: actor.organizationId,
+          ticketId: ticket.id,
+          changedById: actor.userId,
+          previousStatus: ticket.status,
+          newStatus,
+          reason: `${actor.fullName} took ownership of this ticket`,
+        },
+      });
+    }
+
+    return transaction.ticket.findUniqueOrThrow({
+      where: { id: ticket.id },
+      include: ticketDetailInclude(actor),
+    });
+  });
+
+  if (ticket.reporterId !== actor.userId) {
+    await prisma.notification.create({
+      data: {
+        organizationId: actor.organizationId,
+        userId: ticket.reporterId,
+        ticketId: ticket.id,
+        type: 'TICKET_ASSIGNED',
+        title: `${ticket.number} is assigned`,
+        body: `${actor.fullName} is now responsible for this request.`,
+      },
+    });
+  }
+
+  await recordAudit({
+    organizationId: actor.organizationId,
+    actorId: actor.userId,
+    action: 'TICKET_CLAIMED',
+    entityType: 'Ticket',
+    entityId: ticket.id,
+    metadata: { assignedAgentId: actor.userId },
+  });
+
+  return claimed;
 }
 
 export async function changeTicketStatus(
@@ -498,7 +654,7 @@ export async function changeTicketStatus(
         },
       },
     },
-    include: ticketDetailInclude,
+    include: ticketDetailInclude(actor),
   });
 
   await recordAudit({

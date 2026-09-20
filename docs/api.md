@@ -13,7 +13,7 @@ Main route groups:
 - `/auth` login, refresh, logout, current user
 - `/users` administrator user management
 - `/meta` roles, departments, categories
-- `/tickets` ticket creation, queue, details, comments, assignment, status changes, AI approval
+- `/tickets` ticket creation, queue filtering, details, comments, assignment, claiming, status changes, AI approval
 - `/knowledge` knowledge-base listing and search
 - `/notifications` persisted notifications
 - `/analytics/dashboard` management analytics

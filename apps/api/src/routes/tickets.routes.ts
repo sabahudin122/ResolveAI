@@ -5,6 +5,7 @@ import {
   ticketFilterSchema,
   ticketStatuses,
   type Priority,
+  type TicketQueue,
   type TicketStatus,
 } from '@opspilot/shared';
 import { asyncHandler } from '../lib/async-handler.js';
@@ -17,6 +18,7 @@ import {
   approveAiResponse,
   assignTicket,
   changeTicketStatus,
+  claimTicket,
   createTicket,
   getTicket,
   improveTicketDraft,
@@ -35,6 +37,7 @@ ticketsRouter.get(
       req.query as unknown as {
         status?: TicketStatus;
         priority?: Priority;
+        assignment: TicketQueue;
         search?: string;
         page: number;
         pageSize: number;
@@ -110,6 +113,17 @@ ticketsRouter.patch(
   asyncHandler(async (req, res) => {
     const auth = requireAuth(req);
     const ticket = await changeTicketStatus(auth, String(req.params.id), req.body);
+    ok(res, ticket);
+  }),
+);
+
+ticketsRouter.post(
+  '/:id/claim',
+  authorize(supportRoles),
+  validate('params', z.object({ id: z.string().uuid() })),
+  asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    const ticket = await claimTicket(auth, String(req.params.id));
     ok(res, ticket);
   }),
 );

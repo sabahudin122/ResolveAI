@@ -14,6 +14,8 @@ OpsPilot centralizes that workflow. It creates a ticket, generates an AI summary
 
 - Employee ticket creation and personal ticket tracking
 - Support queue for assigned and unassigned tickets
+- Available, assigned-to-me, and organization-wide ticket queue views
+- Race-safe ticket claiming with visible requester, owner, and assignment history
 - Ticket detail page with conversation, metadata, SLA state, AI panel, related tickets, sources, and status history
 - JWT access tokens and rotating refresh tokens
 - bcrypt password hashing

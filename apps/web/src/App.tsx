@@ -22,6 +22,7 @@ import {
   Sparkles,
   Tags,
   TrendingUp,
+  UserCheck,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -238,7 +239,11 @@ function BarList({
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
               <div
                 className="chart-bar h-2 rounded-full bg-ocean"
-                style={{ '--bar-width': `${Math.max(8, (item.value / max) * 100)}%` } as React.CSSProperties}
+                style={
+                  {
+                    '--bar-width': `${Math.max(8, (item.value / max) * 100)}%`,
+                  } as React.CSSProperties
+                }
               />
             </div>
           </div>
@@ -295,7 +300,8 @@ function Login({ onLogin }: { onLogin: (session: UserSession) => void }) {
             OpsPilot
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-200">
-            Internal support, AI triage, knowledge search, SLA control, and approval workflows in one secure operations hub.
+            Internal support, AI triage, knowledge search, SLA control, and approval workflows in
+            one secure operations hub.
           </p>
 
           <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
@@ -406,11 +412,21 @@ function Sidebar({
   const items = [
     { view: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard, show: true },
     { view: 'create' as const, label: 'Create ticket', icon: Plus, show: true },
-    { view: 'tickets' as const, label: canSupport(role) ? 'All tickets' : 'My tickets', icon: ClipboardList, show: true },
+    {
+      view: 'tickets' as const,
+      label: canSupport(role) ? 'All tickets' : 'My tickets',
+      icon: ClipboardList,
+      show: true,
+    },
     { view: 'knowledge' as const, label: 'Knowledge', icon: BookOpen, show: true },
     { view: 'analytics' as const, label: 'Analytics', icon: Gauge, show: canManage(role) },
     { view: 'admin' as const, label: 'Users and SLA', icon: Users, show: role === 'administrator' },
-    { view: 'audit' as const, label: 'Audit logs', icon: ShieldCheck, show: role === 'administrator' },
+    {
+      view: 'audit' as const,
+      label: 'Audit logs',
+      icon: ShieldCheck,
+      show: role === 'administrator',
+    },
     { view: 'profile' as const, label: 'Profile', icon: Settings, show: true },
   ].filter((item) => item.show);
 
@@ -449,7 +465,9 @@ function Sidebar({
 
       <div className="mt-8 hidden rounded-lg border border-slate-200 bg-mist p-4 lg:block">
         <p className="text-sm font-bold text-ink">{session.user.fullName}</p>
-        <p className="mt-1 text-xs uppercase text-slate-500">{session.user.role.replaceAll('_', ' ')}</p>
+        <p className="mt-1 text-xs uppercase text-slate-500">
+          {session.user.role.replaceAll('_', ' ')}
+        </p>
         <button
           type="button"
           onClick={onLogout}
@@ -467,31 +485,65 @@ function TicketList({
   tickets,
   selectedTicketId,
   onSelect,
+  onClaim,
   role,
+  currentUserId,
 }: {
   tickets: Ticket[];
   selectedTicketId: string | null;
   onSelect: (ticketId: string) => void;
+  onClaim: (ticketId: string) => Promise<void>;
   role: RoleSlug;
+  currentUserId: string;
 }) {
   const supportView = canSupport(role);
+  const [queue, setQueue] = useState<'available' | 'mine' | 'all'>(
+    supportView ? 'available' : 'all',
+  );
+  const [search, setSearch] = useState('');
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState('');
   const reporterCount = new Set(tickets.map((ticket) => ticket.reporter?.id).filter(Boolean)).size;
   const sectorCount = new Set(tickets.map((ticket) => ticket.department?.id).filter(Boolean)).size;
+  const availableCount = tickets.filter(
+    (ticket) => !ticket.assignedAgent && !['RESOLVED', 'CLOSED'].includes(ticket.status),
+  ).length;
+  const mineCount = tickets.filter((ticket) => ticket.assignedAgent?.id === currentUserId).length;
+  const visibleTickets = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return tickets.filter((ticket) => {
+      const matchesQueue =
+        !supportView || queue === 'all'
+          ? true
+          : queue === 'available'
+            ? !ticket.assignedAgent && !['RESOLVED', 'CLOSED'].includes(ticket.status)
+            : ticket.assignedAgent?.id === currentUserId;
+      const matchesSearch = normalizedSearch
+        ? `${ticket.number} ${ticket.title} ${ticket.description} ${ticket.reporter?.fullName ?? ''} ${ticket.department?.name ?? ''}`
+            .toLowerCase()
+            .includes(normalizedSearch)
+        : true;
+      return matchesQueue && matchesSearch;
+    });
+  }, [currentUserId, queue, search, supportView, tickets]);
 
-  if (!tickets.length) {
-    return (
-      <div className="panel p-8 text-center">
-        <ClipboardList className="mx-auto text-slate-400" size={36} aria-hidden />
-        <p className="mt-3 font-semibold text-ink">No tickets found</p>
-        <p className="mt-1 text-sm text-slate-500">Create a request or adjust your filters.</p>
-      </div>
-    );
+  async function claim(ticketId: string) {
+    setClaimError('');
+    setClaimingId(ticketId);
+    try {
+      await onClaim(ticketId);
+      setQueue('mine');
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : 'The ticket could not be assigned.');
+    } finally {
+      setClaimingId(null);
+    }
   }
 
   return (
     <div className="space-y-3">
-      {supportView && (
-        <div className="panel flex flex-wrap items-center gap-4 p-4">
+      <div className="panel p-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-mist text-ocean">
               <ClipboardList size={20} aria-hidden />
@@ -511,47 +563,135 @@ function TicketList({
             <p className="text-sm font-semibold text-ink">{sectorCount} departments</p>
           </div>
         </div>
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 lg:flex-row lg:items-center lg:justify-between">
+          {supportView && (
+            <div className="inline-flex w-full rounded-md border border-slate-300 bg-slate-50 p-1 sm:w-auto">
+              {(
+                [
+                  ['available', `Available ${availableCount}`],
+                  ['mine', `Assigned to me ${mineCount}`],
+                  ['all', `All ${tickets.length}`],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setQueue(value)}
+                  className={`min-h-9 flex-1 rounded px-3 text-sm font-semibold transition sm:flex-none ${
+                    queue === value
+                      ? 'bg-white text-ocean shadow-sm'
+                      : 'text-slate-600 hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="relative block w-full lg:max-w-sm">
+            <Search
+              className="pointer-events-none absolute left-3 top-2.5 text-slate-400"
+              size={18}
+              aria-hidden
+            />
+            <span className="sr-only">Search tickets</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-10 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm"
+              placeholder="Search tickets"
+            />
+          </label>
+        </div>
+        {claimError && <p className="mt-3 text-sm font-semibold text-rose-700">{claimError}</p>}
+      </div>
+
+      {!visibleTickets.length && (
+        <div className="panel p-8 text-center">
+          <ClipboardList className="mx-auto text-slate-400" size={36} aria-hidden />
+          <p className="mt-3 font-semibold text-ink">No matching tickets</p>
+          <p className="mt-1 text-sm text-slate-500">Try another queue or search term.</p>
+        </div>
       )}
-      {tickets.map((ticket) => (
-        <button
-          key={ticket.id}
-          type="button"
-          onClick={() => onSelect(ticket.id)}
-          className={`panel w-full p-4 text-left transition hover:border-ocean ${
-            selectedTicketId === ticket.id ? 'border-ocean' : ''
-          }`}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase text-slate-500">{ticket.number}</p>
-              <h3 className="mt-1 font-bold text-ink">{ticket.title}</h3>
+
+      {visibleTickets.map((ticket) => {
+        const isClosed = ['RESOLVED', 'CLOSED'].includes(ticket.status);
+        const isMine = ticket.assignedAgent?.id === currentUserId;
+        return (
+          <article
+            key={ticket.id}
+            className={`panel overflow-hidden transition hover:border-ocean ${
+              selectedTicketId === ticket.id ? 'border-ocean' : ''
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onSelect(ticket.id)}
+              className="w-full p-4 text-left"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase text-slate-500">{ticket.number}</p>
+                  <h3 className="mt-1 font-bold text-ink">{ticket.title}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill status={ticket.status} />
+                  <PriorityPill priority={ticket.priority} />
+                </div>
+              </div>
+              <p className="mt-3 line-clamp-2 text-sm text-slate-600">{ticket.description}</p>
+              <div className="mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <UserRound size={14} aria-hidden />
+                  <span className="truncate">
+                    Sent by: {ticket.reporter?.fullName ?? 'Unknown'}
+                  </span>
+                </span>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <Building2 size={14} aria-hidden />
+                  <span className="truncate">
+                    Sector: {ticket.department?.name ?? 'Not assigned'}
+                  </span>
+                </span>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <Tags size={14} aria-hidden />
+                  <span className="truncate">
+                    Category: {ticket.category?.name ?? 'Uncategorized'}
+                  </span>
+                </span>
+                <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+              </div>
+            </button>
+            <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="inline-flex min-w-0 items-center gap-2 text-sm">
+                <UserCheck
+                  size={17}
+                  className={ticket.assignedAgent ? 'text-pine' : 'text-slate-400'}
+                  aria-hidden
+                />
+                <span className="truncate font-semibold text-ink">
+                  {ticket.assignedAgent
+                    ? isMine
+                      ? 'Assigned to you'
+                      : `Assigned to ${ticket.assignedAgent.fullName}`
+                    : 'Available for assignment'}
+                </span>
+              </div>
+              {supportView && !ticket.assignedAgent && !isClosed && (
+                <button
+                  type="button"
+                  onClick={() => void claim(ticket.id)}
+                  disabled={claimingId === ticket.id}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-md bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:cursor-wait disabled:opacity-60"
+                >
+                  <UserCheck size={16} aria-hidden />
+                  {claimingId === ticket.id ? 'Taking...' : 'Take ticket'}
+                </button>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <StatusPill status={ticket.status} />
-              <PriorityPill priority={ticket.priority} />
-            </div>
-          </div>
-          <p className="mt-3 line-clamp-2 text-sm text-slate-600">{ticket.description}</p>
-          <div className="mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 xl:grid-cols-5">
-            {supportView && (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <UserRound size={14} aria-hidden />
-                <span className="truncate">Sent by: {ticket.reporter?.fullName ?? 'Unknown'}</span>
-              </span>
-            )}
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Building2 size={14} aria-hidden />
-              <span className="truncate">Sector: {ticket.department?.name ?? 'Not assigned'}</span>
-            </span>
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Tags size={14} aria-hidden />
-              <span className="truncate">Category: {ticket.category?.name ?? 'Uncategorized'}</span>
-            </span>
-            <span className="truncate">Owner: {ticket.assignedAgent?.fullName ?? 'Unassigned'}</span>
-            <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
-          </div>
-        </button>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -565,7 +705,9 @@ function CreateTicket({
   onImprove: (body: { title: string; description: string }) => Promise<TicketDraftSuggestion>;
   onCreate: (body: { title: string; description: string; categoryId?: string }) => Promise<void>;
 }) {
-  const [title, setTitle] = useState('I cannot connect to the company VPN after changing my password');
+  const [title, setTitle] = useState(
+    'I cannot connect to the company VPN after changing my password',
+  );
   const [description, setDescription] = useState(
     'I changed my password this morning. Email works, but the company VPN keeps saying authentication failed and I cannot access internal applications.',
   );
@@ -623,7 +765,9 @@ function CreateTicket({
           </div>
           <div>
             <h2 className="text-xl font-bold text-ink">Create ticket</h2>
-            <p className="text-sm text-slate-500">AI triage will prepare recommendations for support review.</p>
+            <p className="text-sm text-slate-500">
+              AI triage will prepare recommendations for support review.
+            </p>
           </div>
         </div>
 
@@ -648,7 +792,10 @@ function CreateTicket({
           className="mt-2 w-full rounded-md border border-slate-300 px-3 py-3"
         />
 
-        <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="ticket-category">
+        <label
+          className="mt-4 block text-sm font-semibold text-slate-700"
+          htmlFor="ticket-category"
+        >
           Category
         </label>
         <select
@@ -677,7 +824,8 @@ function CreateTicket({
               <div>
                 <p className="text-sm font-bold text-ink">AI improved this draft</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  {draftSuggestion.mock ? 'Mock AI' : 'OpenAI'} · {Math.round(draftSuggestion.confidence * 100)}% confidence
+                  {draftSuggestion.mock ? 'Mock AI' : 'OpenAI'} ·{' '}
+                  {Math.round(draftSuggestion.confidence * 100)}% confidence
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -714,7 +862,10 @@ function CreateTicket({
           </div>
         </div>
 
-        <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="ticket-description">
+        <label
+          className="mt-4 block text-sm font-semibold text-slate-700"
+          htmlFor="ticket-description"
+        >
           Description
         </label>
         <textarea
@@ -739,9 +890,17 @@ function CreateTicket({
         <Sparkles className="text-ocean" size={24} aria-hidden />
         <h3 className="mt-4 font-bold text-ink">AI guardrails</h3>
         <div className="mt-4 space-y-3 text-sm text-slate-600">
-          <p>AI can summarize, recommend a category, rank priority, find related tickets, and draft a response.</p>
-          <p>It cannot close tickets, assign employees, change official priority, or send replies without approval.</p>
-          <p>When no OpenAI key is configured, OpsPilot clearly uses the deterministic mock provider.</p>
+          <p>
+            AI can summarize, recommend a category, rank priority, find related tickets, and draft a
+            response.
+          </p>
+          <p>
+            It cannot close tickets, assign employees, change official priority, or send replies
+            without approval.
+          </p>
+          <p>
+            When no OpenAI key is configured, OpsPilot clearly uses the deterministic mock provider.
+          </p>
         </div>
       </aside>
     </section>
@@ -751,19 +910,25 @@ function CreateTicket({
 function TicketDetail({
   ticket,
   role,
+  currentUserId,
   onComment,
   onStatus,
+  onClaim,
   onApproveAi,
 }: {
   ticket: Ticket | null;
   role: RoleSlug;
+  currentUserId: string;
   onComment: (body: string, visibility: 'PUBLIC' | 'INTERNAL') => Promise<void>;
   onStatus: (status: TicketStatus) => Promise<void>;
+  onClaim: () => Promise<void>;
   onApproveAi: (suggestionId: string, body?: string) => Promise<void>;
 }) {
   const [comment, setComment] = useState('');
   const [internal, setInternal] = useState(false);
   const [aiDraft, setAiDraft] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState('');
   const latestAi = ticket?.aiSuggestions?.[0];
 
   useEffect(() => {
@@ -780,6 +945,20 @@ function TicketDetail({
   }
 
   const support = canSupport(role);
+  const isMine = ticket.assignedAgent?.id === currentUserId;
+  const isClosed = ['RESOLVED', 'CLOSED'].includes(ticket.status);
+
+  async function claim() {
+    setClaimError('');
+    setClaiming(true);
+    try {
+      await onClaim();
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : 'The ticket could not be assigned.');
+    } finally {
+      setClaiming(false);
+    }
+  }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_380px]">
@@ -796,11 +975,48 @@ function TicketDetail({
             </div>
           </div>
           <p className="mt-5 whitespace-pre-wrap text-slate-700">{ticket.description}</p>
-          <div className="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
+          <div className="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-4">
             <span>Reporter: {ticket.reporter?.fullName ?? 'Unknown'}</span>
             <span>Department: {ticket.department?.name ?? 'Not assigned'}</span>
-            <span>SLA: {ticket.slaDeadlineAt ? new Date(ticket.slaDeadlineAt).toLocaleString() : 'Not set'}</span>
+            <span>Owner: {ticket.assignedAgent?.fullName ?? 'Available'}</span>
+            <span>
+              SLA:{' '}
+              {ticket.slaDeadlineAt ? new Date(ticket.slaDeadlineAt).toLocaleString() : 'Not set'}
+            </span>
           </div>
+          <div className="mt-5 flex min-h-16 flex-wrap items-center justify-between gap-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${ticket.assignedAgent ? 'bg-emerald-50 text-pine' : 'bg-white text-slate-400'}`}
+              >
+                <UserCheck size={20} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-ink">
+                  {ticket.assignedAgent
+                    ? isMine
+                      ? 'You are responsible for this ticket'
+                      : `${ticket.assignedAgent.fullName} is responsible`
+                    : 'This ticket is available'}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Request submitted by {ticket.reporter?.fullName ?? 'an employee'}
+                </p>
+              </div>
+            </div>
+            {support && !ticket.assignedAgent && !isClosed && (
+              <button
+                type="button"
+                onClick={() => void claim()}
+                disabled={claiming}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md bg-ocean px-4 py-2 font-semibold text-white hover:bg-ink disabled:cursor-wait disabled:opacity-60"
+              >
+                <UserCheck size={17} aria-hidden />
+                {claiming ? 'Taking ticket...' : 'Take ticket'}
+              </button>
+            )}
+          </div>
+          {claimError && <p className="mt-3 text-sm font-semibold text-rose-700">{claimError}</p>}
         </div>
 
         <div className="panel p-6">
@@ -858,7 +1074,9 @@ function TicketDetail({
         <section className="panel p-5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-bold text-ink">AI assistant</h3>
-            {latestAi?.mock && <span className="status-pill border-amber-200 bg-amber-50 text-marigold">Mock</span>}
+            {latestAi?.mock && (
+              <span className="status-pill border-amber-200 bg-amber-50 text-marigold">Mock</span>
+            )}
           </div>
           {latestAi ? (
             <>
@@ -895,8 +1113,13 @@ function TicketDetail({
                 <div className="mt-2 space-y-2">
                   {latestAi.references?.length ? (
                     latestAi.references.map((reference) => (
-                      <div key={reference.knowledgeDocument.id} className="rounded-md bg-slate-50 p-3 text-sm">
-                        <p className="font-semibold text-ink">{reference.knowledgeDocument.title}</p>
+                      <div
+                        key={reference.knowledgeDocument.id}
+                        className="rounded-md bg-slate-50 p-3 text-sm"
+                      >
+                        <p className="font-semibold text-ink">
+                          {reference.knowledgeDocument.title}
+                        </p>
                         <p className="mt-1 text-slate-600">{reference.excerpt}</p>
                       </div>
                     ))
@@ -932,18 +1155,50 @@ function TicketDetail({
 
         <section className="panel p-5">
           <h3 className="font-bold text-ink">Workflow</h3>
+          <div className="mt-4 border-b border-slate-200 pb-4">
+            <h4 className="text-sm font-bold text-slate-700">Assignment activity</h4>
+            <div className="mt-3 space-y-3">
+              {ticket.assignments?.length ? (
+                ticket.assignments.map((assignment) => (
+                  <div key={assignment.id} className="flex items-start gap-3 text-sm">
+                    <UserCheck className="mt-0.5 shrink-0 text-ocean" size={16} aria-hidden />
+                    <div>
+                      <p className="font-semibold text-ink">
+                        {assignment.agent.fullName} took this ticket
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(assignment.assignedAt).toLocaleString()}
+                        {assignment.unassignedAt
+                          ? ` - handed off ${new Date(assignment.unassignedAt).toLocaleString()}`
+                          : ' - current owner'}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No assignment activity yet.</p>
+              )}
+            </div>
+          </div>
           <select
             value={ticket.status}
             onChange={(event) => void onStatus(event.target.value as TicketStatus)}
             className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2"
           >
-            {['NEW', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_FOR_EMPLOYEE', 'RESOLVED', 'CLOSED', 'REOPENED'].map(
-              (status) => (
-                <option key={status} value={status}>
-                  {status.replaceAll('_', ' ')}
-                </option>
-              ),
-            )}
+            {[
+              'NEW',
+              'TRIAGED',
+              'ASSIGNED',
+              'IN_PROGRESS',
+              'WAITING_FOR_EMPLOYEE',
+              'RESOLVED',
+              'CLOSED',
+              'REOPENED',
+            ].map((status) => (
+              <option key={status} value={status}>
+                {status.replaceAll('_', ' ')}
+              </option>
+            ))}
           </select>
           <div className="mt-4 space-y-3">
             {ticket.statusHistory?.map((entry) => (
@@ -970,7 +1225,9 @@ function groupTickets(
     const name = getName(ticket);
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  return [...counts.entries()].map(([name, value]) => ({ name, value })).sort((left, right) => right.value - left.value);
+  return [...counts.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((left, right) => right.value - left.value);
 }
 
 function DonutScore({ label, value }: { label: string; value: number }) {
@@ -1021,14 +1278,29 @@ function TrendChart({ items }: { items: Array<{ name: string; value: number }> }
     <section className="dashboard-card panel p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Recurring issues</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+            Recurring issues
+          </h3>
           <p className="mt-1 text-sm text-slate-500">Top repeated themes</p>
         </div>
         <TrendingUp className="text-ocean" size={20} aria-hidden />
       </div>
-      <svg viewBox="0 0 300 120" className="mt-4 h-36 w-full" role="img" aria-label="Recurring issue trend graph">
+      <svg
+        viewBox="0 0 300 120"
+        className="mt-4 h-36 w-full"
+        role="img"
+        aria-label="Recurring issue trend graph"
+      >
         <path d="M18 104 H286" stroke="#e2e8f0" strokeWidth="2" />
-        <polyline className="trend-line" points={points} fill="none" stroke="#164a6f" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+        <polyline
+          className="trend-line"
+          points={points}
+          fill="none"
+          stroke="#164a6f"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="4"
+        />
         {points.split(' ').map((point) => {
           const [x, y] = point.split(',');
           return <circle key={point} cx={x} cy={y} r="4" fill="#164a6f" />;
@@ -1058,10 +1330,15 @@ function EmployeeDashboard({
   onOpenTickets: () => void;
 }) {
   const activeTickets = tickets.filter((ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status));
-  const waitingTickets = tickets.filter((ticket) => ticket.status === 'WAITING_FOR_EMPLOYEE' || ticket.status === 'REOPENED');
+  const waitingTickets = tickets.filter(
+    (ticket) => ticket.status === 'WAITING_FOR_EMPLOYEE' || ticket.status === 'REOPENED',
+  );
   const soonestTicket = activeTickets
     .filter((ticket) => ticket.slaDeadlineAt)
-    .sort((left, right) => new Date(left.slaDeadlineAt!).getTime() - new Date(right.slaDeadlineAt!).getTime())[0];
+    .sort(
+      (left, right) =>
+        new Date(left.slaDeadlineAt!).getTime() - new Date(right.slaDeadlineAt!).getTime(),
+    )[0];
   const title = canSupport(role) ? 'Support cockpit' : 'Employee cockpit';
 
   return (
@@ -1070,7 +1347,9 @@ function EmployeeDashboard({
         <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase text-cyan-100">{title}</p>
-            <h2 className="mt-2 text-3xl font-bold">Tickets, AI triage, and SLA signals in one view.</h2>
+            <h2 className="mt-2 text-3xl font-bold">
+              Tickets, AI triage, and SLA signals in one view.
+            </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
               {canSupport(role)
                 ? 'Review incoming work, watch urgent items, and jump straight into the queue.'
@@ -1078,10 +1357,18 @@ function EmployeeDashboard({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={onCreate} className="rounded-md bg-cyan-300 px-4 py-2 font-bold text-slate-950 hover:bg-white">
+            <button
+              type="button"
+              onClick={onCreate}
+              className="rounded-md bg-cyan-300 px-4 py-2 font-bold text-slate-950 hover:bg-white"
+            >
               Create ticket
             </button>
-            <button type="button" onClick={onOpenTickets} className="rounded-md border border-white/20 px-4 py-2 font-bold text-white hover:bg-white/10">
+            <button
+              type="button"
+              onClick={onOpenTickets}
+              className="rounded-md border border-white/20 px-4 py-2 font-bold text-white hover:bg-white/10"
+            >
               View tickets
             </button>
           </div>
@@ -1089,11 +1376,28 @@ function EmployeeDashboard({
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="Active tickets" value={activeTickets.length} icon={ClipboardList} tone="ocean" />
-        <Metric label="Need reply" value={waitingTickets.length} icon={MessageSquare} tone="amber" />
+        <Metric
+          label="Active tickets"
+          value={activeTickets.length}
+          icon={ClipboardList}
+          tone="ocean"
+        />
+        <Metric
+          label="Need reply"
+          value={waitingTickets.length}
+          icon={MessageSquare}
+          tone="amber"
+        />
         <Metric
           label="Next SLA"
-          value={soonestTicket?.slaDeadlineAt ? new Date(soonestTicket.slaDeadlineAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Clear'}
+          value={
+            soonestTicket?.slaDeadlineAt
+              ? new Date(soonestTicket.slaDeadlineAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : 'Clear'
+          }
           icon={Clock3}
           tone="green"
         />
@@ -1103,14 +1407,21 @@ function EmployeeDashboard({
         <section className="dashboard-card panel p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Recent tickets</h3>
-              <p className="mt-1 text-sm text-slate-500">{canSupport(role) ? 'Newest organization work' : 'Your latest requests'}</p>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                Recent tickets
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {canSupport(role) ? 'Newest organization work' : 'Your latest requests'}
+              </p>
             </div>
             <Sparkles className="text-ocean" size={20} aria-hidden />
           </div>
           <div className="mt-4 divide-y divide-slate-100">
             {tickets.slice(0, 5).map((ticket) => (
-              <div key={ticket.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div
+                key={ticket.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-ink">{ticket.title}</p>
                   <p className="mt-1 text-xs text-slate-500">
@@ -1125,7 +1436,11 @@ function EmployeeDashboard({
             ))}
           </div>
         </section>
-        <BarList title="By sector" items={groupTickets(tickets, (ticket) => ticket.department?.name ?? 'No sector')} compact />
+        <BarList
+          title="By sector"
+          items={groupTickets(tickets, (ticket) => ticket.department?.name ?? 'No sector')}
+          compact
+        />
       </div>
     </section>
   );
@@ -1139,7 +1454,9 @@ function AdminDashboard({
   tickets: Ticket[];
 }) {
   const urgentTickets = tickets.filter(
-    (ticket) => ['CRITICAL', 'HIGH'].includes(ticket.priority) && !['RESOLVED', 'CLOSED'].includes(ticket.status),
+    (ticket) =>
+      ['CRITICAL', 'HIGH'].includes(ticket.priority) &&
+      !['RESOLVED', 'CLOSED'].includes(ticket.status),
   );
   const sectorLoad = groupTickets(tickets, (ticket) => ticket.department?.name ?? 'No sector');
 
@@ -1149,9 +1466,12 @@ function AdminDashboard({
         <div className="relative z-10 grid gap-6 lg:grid-cols-[1fr_360px] lg:items-end">
           <div>
             <p className="text-sm font-bold uppercase text-cyan-100">Admin command center</p>
-            <h2 className="mt-2 text-3xl font-bold">Live overview of people, sectors, AI, and SLA risk.</h2>
+            <h2 className="mt-2 text-3xl font-bold">
+              Live overview of people, sectors, AI, and SLA risk.
+            </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-              Track the full organization queue and see where work is building up across departments.
+              Track the full organization queue and see where work is building up across
+              departments.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1168,7 +1488,12 @@ function AdminDashboard({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Open tickets" value={analytics.openTickets} icon={ClipboardList} tone="ocean" />
+        <Metric
+          label="Open tickets"
+          value={analytics.openTickets}
+          icon={ClipboardList}
+          tone="ocean"
+        />
         <Metric label="Unassigned" value={analytics.unassignedTickets} icon={Users} tone="violet" />
         <Metric label="At risk SLA" value={analytics.atRiskTickets} icon={Gauge} tone="amber" />
         <Metric label="Overdue" value={analytics.overdueTickets} icon={AlertTriangle} tone="red" />
@@ -1189,8 +1514,12 @@ function AdminDashboard({
       <section className="dashboard-card panel p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Urgent queue</h3>
-            <p className="mt-1 text-sm text-slate-500">Critical and high-priority tickets still open</p>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+              Urgent queue
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Critical and high-priority tickets still open
+            </p>
           </div>
           <Cpu className="text-ocean" size={20} aria-hidden />
         </div>
@@ -1202,7 +1531,8 @@ function AdminDashboard({
                   <p className="text-xs font-bold uppercase text-slate-500">{ticket.number}</p>
                   <p className="mt-1 truncate font-bold text-ink">{ticket.title}</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {ticket.reporter?.fullName ?? 'Unknown'} · {ticket.department?.name ?? 'No sector'}
+                    {ticket.reporter?.fullName ?? 'Unknown'} ·{' '}
+                    {ticket.department?.name ?? 'No sector'}
                   </p>
                 </div>
                 <PriorityPill priority={ticket.priority} />
@@ -1232,12 +1562,21 @@ function Dashboard({
     return <AdminDashboard analytics={analytics} tickets={tickets} />;
   }
 
-  return <EmployeeDashboard role={role} tickets={tickets} onCreate={onCreate} onOpenTickets={onOpenTickets} />;
+  return (
+    <EmployeeDashboard
+      role={role}
+      tickets={tickets}
+      onCreate={onCreate}
+      onOpenTickets={onOpenTickets}
+    />
+  );
 }
 
 function Knowledge({ session }: { session: UserSession }) {
   const [query, setQuery] = useState('vpn password');
-  const [results, setResults] = useState<Array<{ id: string; title: string; excerpt: string; score?: number }>>([]);
+  const [results, setResults] = useState<
+    Array<{ id: string; title: string; excerpt: string; score?: number }>
+  >([]);
 
   useEffect(() => {
     void api.searchKnowledge(session.accessToken, query).then(setResults);
@@ -1289,18 +1628,24 @@ function AdminPanel({ session }: { session: UserSession }) {
       department?: { id?: string; name: string } | null;
     }>
   >([]);
-  const [audit, setAudit] = useState<Array<{ id: string; action: string; entityType: string; createdAt: string }>>([]);
+  const [audit, setAudit] = useState<
+    Array<{ id: string; action: string; entityType: string; createdAt: string }>
+  >([]);
 
   useEffect(() => {
     void api.users(session.accessToken).then(setUsers);
     void api.audit(session.accessToken).then(setAudit);
   }, [session.accessToken]);
 
-  const departmentCounts = [...users.reduce((counts, user) => {
-    const name = user.department?.name ?? 'No department';
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-    return counts;
-  }, new Map<string, number>()).entries()].map(([name, value]) => ({ name, value }));
+  const departmentCounts = [
+    ...users
+      .reduce((counts, user) => {
+        const name = user.department?.name ?? 'No department';
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>())
+      .entries(),
+  ].map(([name, value]) => ({ name, value }));
 
   return (
     <section className="grid gap-6 xl:grid-cols-2">
@@ -1308,7 +1653,10 @@ function AdminPanel({ session }: { session: UserSession }) {
         <h2 className="text-xl font-bold text-ink">User management</h2>
         <div className="mt-2 flex flex-wrap gap-2">
           {departmentCounts.map((item) => (
-            <span key={item.name} className="status-pill border-slate-200 bg-slate-50 text-slate-600">
+            <span
+              key={item.name}
+              className="status-pill border-slate-200 bg-slate-50 text-slate-600"
+            >
               {item.name}: {item.value}
             </span>
           ))}
@@ -1376,11 +1724,23 @@ export function App() {
     if (!session) {
       return;
     }
-    const [ticketPage, categoryPage] = await Promise.all([
-      api.listTickets(session.accessToken),
+    const [firstTicketPage, categoryPage] = await Promise.all([
+      api.listTickets(session.accessToken, '?pageSize=100'),
       api.listCategories(session.accessToken),
     ]);
-    setTickets(ticketPage.items);
+    const remainingPageNumbers = Array.from(
+      { length: Math.max(0, Math.ceil(firstTicketPage.total / 100) - 1) },
+      (_, index) => index + 2,
+    );
+    const remainingPages = await Promise.all(
+      remainingPageNumbers.map((page) =>
+        api.listTickets(session.accessToken, `?page=${page}&pageSize=100`),
+      ),
+    );
+    setTickets([
+      ...firstTicketPage.items,
+      ...remainingPages.flatMap((ticketPage) => ticketPage.items),
+    ]);
     setCategories(categoryPage);
     if (canManage(session.user.role)) {
       setAnalytics(await api.analytics(session.accessToken));
@@ -1426,12 +1786,23 @@ export function App() {
 
   const activeSession = session;
 
-  async function createNewTicket(body: { title: string; description: string; categoryId?: string }) {
+  async function createNewTicket(body: {
+    title: string;
+    description: string;
+    categoryId?: string;
+  }) {
     setError('');
     const ticket = await api.createTicket(activeSession.accessToken, body);
     await reload();
     await loadTicket(ticket.id);
     setView('detail');
+  }
+
+  async function claimTicket(ticketId: string) {
+    const claimed = await api.claimTicket(activeSession.accessToken, ticketId);
+    setSelectedTicketId(ticketId);
+    setSelectedTicket(claimed);
+    await reload();
   }
 
   async function logout() {
@@ -1449,7 +1820,9 @@ export function App() {
       <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-bold uppercase text-ocean">{session.user.role.replaceAll('_', ' ')}</p>
+            <p className="text-sm font-bold uppercase text-ocean">
+              {session.user.role.replaceAll('_', ' ')}
+            </p>
             <h1 className="mt-1 text-2xl font-bold text-ink">{headerTitle}</h1>
           </div>
           <button className="icon-button" title="Notifications">
@@ -1484,6 +1857,8 @@ export function App() {
             tickets={tickets}
             selectedTicketId={selectedTicketId}
             role={session.user.role}
+            currentUserId={session.user.id}
+            onClaim={claimTicket}
             onSelect={(ticketId) => {
               void loadTicket(ticketId);
               setView('detail');
@@ -1494,6 +1869,13 @@ export function App() {
           <TicketDetail
             ticket={selectedTicket}
             role={session.user.role}
+            currentUserId={session.user.id}
+            onClaim={async () => {
+              if (!selectedTicket) {
+                return;
+              }
+              await claimTicket(selectedTicket.id);
+            }}
             onComment={async (body, visibility) => {
               if (!selectedTicket) {
                 return;
@@ -1505,7 +1887,12 @@ export function App() {
               if (!selectedTicket) {
                 return;
               }
-              await api.changeStatus(session.accessToken, selectedTicket.id, status, 'Updated from web dashboard');
+              await api.changeStatus(
+                session.accessToken,
+                selectedTicket.id,
+                status,
+                'Updated from web dashboard',
+              );
               await loadTicket(selectedTicket.id);
               await reload();
             }}
@@ -1513,7 +1900,12 @@ export function App() {
               if (!selectedTicket) {
                 return;
               }
-              await api.approveAiSuggestion(session.accessToken, selectedTicket.id, suggestionId, body);
+              await api.approveAiSuggestion(
+                session.accessToken,
+                selectedTicket.id,
+                suggestionId,
+                body,
+              );
               await loadTicket(selectedTicket.id);
             }}
           />

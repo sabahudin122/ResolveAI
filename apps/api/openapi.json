@@ -60,6 +60,11 @@
         "summary": "Assign a ticket to a support agent"
       }
     },
+    "/tickets/{id}/claim": {
+      "post": {
+        "summary": "Claim an available ticket for the authenticated support team member"
+      }
+    },
     "/knowledge": {
       "get": {
         "summary": "Search or list knowledge-base documents"

@@ -1,9 +1,16 @@
-import type { Category, DashboardAnalytics, Ticket, TicketDraftSuggestion, UserSession } from '../types';
+import type {
+  Category,
+  DashboardAnalytics,
+  Ticket,
+  TicketDraftSuggestion,
+  UserSession,
+} from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
 const DEMO_TOKEN_PREFIX = 'demo-access-token:';
 
-type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string; code: string } };
+type ApiEnvelope<T> =
+  { ok: true; data: T } | { ok: false; error: { message: string; code: string } };
 
 async function request<T>(
   path: string,
@@ -38,14 +45,54 @@ function createId(prefix: string) {
 }
 
 const categories: Category[] = [
-  { id: 'cat-network', name: 'Network access', slug: 'network-access', department: { id: 'dept-it', name: 'IT Support' } },
-  { id: 'cat-security', name: 'Security incident', slug: 'security-incident', department: { id: 'dept-sec', name: 'Information Security' } },
-  { id: 'cat-hr', name: 'HR policy', slug: 'hr-policy', department: { id: 'dept-hr', name: 'Human Resources' } },
-  { id: 'cat-finance', name: 'Payroll question', slug: 'payroll-question', department: { id: 'dept-fin', name: 'Finance' } },
-  { id: 'cat-facilities', name: 'Facilities issue', slug: 'facilities-issue', department: { id: 'dept-fac', name: 'Facilities' } },
-  { id: 'cat-account', name: 'Account access', slug: 'account-access', department: { id: 'dept-it', name: 'IT Support' } },
-  { id: 'cat-hardware', name: 'Hardware request', slug: 'hardware-request', department: { id: 'dept-it', name: 'IT Support' } },
-  { id: 'cat-operations', name: 'Operational request', slug: 'operational-request', department: { id: 'dept-ops', name: 'Operations' } },
+  {
+    id: 'cat-network',
+    name: 'Network access',
+    slug: 'network-access',
+    department: { id: 'dept-it', name: 'IT Support' },
+  },
+  {
+    id: 'cat-security',
+    name: 'Security incident',
+    slug: 'security-incident',
+    department: { id: 'dept-sec', name: 'Information Security' },
+  },
+  {
+    id: 'cat-hr',
+    name: 'HR policy',
+    slug: 'hr-policy',
+    department: { id: 'dept-hr', name: 'Human Resources' },
+  },
+  {
+    id: 'cat-finance',
+    name: 'Payroll question',
+    slug: 'payroll-question',
+    department: { id: 'dept-fin', name: 'Finance' },
+  },
+  {
+    id: 'cat-facilities',
+    name: 'Facilities issue',
+    slug: 'facilities-issue',
+    department: { id: 'dept-fac', name: 'Facilities' },
+  },
+  {
+    id: 'cat-account',
+    name: 'Account access',
+    slug: 'account-access',
+    department: { id: 'dept-it', name: 'IT Support' },
+  },
+  {
+    id: 'cat-hardware',
+    name: 'Hardware request',
+    slug: 'hardware-request',
+    department: { id: 'dept-it', name: 'IT Support' },
+  },
+  {
+    id: 'cat-operations',
+    name: 'Operational request',
+    slug: 'operational-request',
+    department: { id: 'dept-ops', name: 'Operations' },
+  },
 ];
 
 const demoUsers = [
@@ -264,7 +311,10 @@ const demoTickets: Ticket[] = [
         },
         references: [
           {
-            knowledgeDocument: { id: 'kb-vpn-reset', title: 'Reset company VPN after password change' },
+            knowledgeDocument: {
+              id: 'kb-vpn-reset',
+              title: 'Reset company VPN after password change',
+            },
             excerpt:
               'When a user changes their password, the VPN client may keep an old credential cache. Remove saved credentials and reconnect.',
             relevanceScore: 0.92,
@@ -300,7 +350,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-security-1',
     number: 'ACME-2026-00029',
     title: 'Suspicious invoice email',
-    description: 'A vendor email included an unexpected invoice attachment from a misspelled domain.',
+    description:
+      'A vendor email included an unexpected invoice attachment from a misspelled domain.',
     status: 'IN_PROGRESS',
     priority: 'CRITICAL',
     aiSummary: 'Possible phishing email with suspicious attachment and vendor impersonation.',
@@ -337,7 +388,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-account-1',
     number: 'ACME-2026-00026',
     title: 'Need access to finance reporting folder',
-    description: 'My manager asked me to review quarter-end reporting, but the finance folder says access denied.',
+    description:
+      'My manager asked me to review quarter-end reporting, but the finance folder says access denied.',
     status: 'WAITING_FOR_EMPLOYEE',
     priority: 'MEDIUM',
     aiSummary: 'Finance folder access request pending approval and duration confirmation.',
@@ -357,7 +409,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-hardware-1',
     number: 'ACME-2026-00025',
     title: 'New hire laptop request for onboarding',
-    description: 'A new employee starts Monday and needs a laptop, dock, headset, and standard productivity access.',
+    description:
+      'A new employee starts Monday and needs a laptop, dock, headset, and standard productivity access.',
     status: 'TRIAGED',
     priority: 'HIGH',
     aiSummary: 'New hire hardware request with onboarding deadline.',
@@ -377,7 +430,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-hr-1',
     number: 'ACME-2026-00024',
     title: 'Benefits enrollment date question',
-    description: 'I missed the benefits enrollment reminder and need to know whether I can still update my coverage.',
+    description:
+      'I missed the benefits enrollment reminder and need to know whether I can still update my coverage.',
     status: 'RESOLVED',
     priority: 'LOW',
     aiSummary: 'Benefits enrollment eligibility and policy question.',
@@ -397,7 +451,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-payroll-1',
     number: 'ACME-2026-00023',
     title: 'Payroll deduction looks incorrect',
-    description: 'My latest payslip includes a deduction I do not recognize, and I need Finance to review it.',
+    description:
+      'My latest payslip includes a deduction I do not recognize, and I need Finance to review it.',
     status: 'ASSIGNED',
     priority: 'MEDIUM',
     aiSummary: 'Unrecognized payroll deduction requires Finance review.',
@@ -417,7 +472,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-ops-1',
     number: 'ACME-2026-00022',
     title: 'Workflow automation failed overnight',
-    description: 'The overnight operations workflow failed and several internal reports did not refresh this morning.',
+    description:
+      'The overnight operations workflow failed and several internal reports did not refresh this morning.',
     status: 'IN_PROGRESS',
     priority: 'HIGH',
     aiSummary: 'Operations workflow failure affecting morning reporting.',
@@ -437,7 +493,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-security-2',
     number: 'ACME-2026-00021',
     title: 'Security training completion not recorded',
-    description: 'I completed security training yesterday, but the compliance dashboard still says it is overdue.',
+    description:
+      'I completed security training yesterday, but the compliance dashboard still says it is overdue.',
     status: 'CLOSED',
     priority: 'MEDIUM',
     aiSummary: 'Security compliance training sync mismatch.',
@@ -457,7 +514,8 @@ const demoTickets: Ticket[] = [
     id: 'ticket-employee-current-2',
     number: 'ACME-2026-00020',
     title: 'Video meeting license not available',
-    description: 'I need to host a client call this afternoon but my video meeting account is still on the basic license.',
+    description:
+      'I need to host a client call this afternoon but my video meeting account is still on the basic license.',
     status: 'ASSIGNED',
     priority: 'MEDIUM',
     aiSummary: 'Video meeting license upgrade needed before a client call.',
@@ -575,12 +633,49 @@ function cleanDraftText(text: string) {
 }
 
 function classifyDemoTicketText(text: string) {
-  const isSecurity = includesAny(text, ['breach', 'breached', 'hacked', 'phishing', 'malware', 'suspicious']);
-  const isPayroll = includesAny(text, ['payroll', 'salary', 'payslip', 'invoice', 'reimbursement', 'expense']);
-  const isFacilities = includesAny(text, ['desk', 'chair', 'badge', 'door', 'printer', 'room', 'display']);
+  const isSecurity = includesAny(text, [
+    'breach',
+    'breached',
+    'hacked',
+    'phishing',
+    'malware',
+    'suspicious',
+  ]);
+  const isPayroll = includesAny(text, [
+    'payroll',
+    'salary',
+    'payslip',
+    'invoice',
+    'reimbursement',
+    'expense',
+  ]);
+  const isFacilities = includesAny(text, [
+    'desk',
+    'chair',
+    'badge',
+    'door',
+    'printer',
+    'room',
+    'display',
+  ]);
   const isHr = includesAny(text, ['benefits', 'policy', 'vacation', 'onboarding', 'leave']);
-  const isHardware = includesAny(text, ['laptop', 'monitor', 'keyboard', 'dock', 'battery', 'headset']);
-  const isAccess = includesAny(text, ['access', 'locked', 'password', 'account', 'folder', 'mailbox', 'license']);
+  const isHardware = includesAny(text, [
+    'laptop',
+    'monitor',
+    'keyboard',
+    'dock',
+    'battery',
+    'headset',
+  ]);
+  const isAccess = includesAny(text, [
+    'access',
+    'locked',
+    'password',
+    'account',
+    'folder',
+    'mailbox',
+    'license',
+  ]);
   const isNetwork = includesAny(text, ['vpn', 'network', 'wifi', 'internet']);
   const isSystemOutage = includesAny(text, [
     'api',
@@ -611,10 +706,12 @@ function classifyDemoTicketText(text: string) {
       category: categories[1]!,
       priority: 'CRITICAL' as const,
       title: 'Possible security breach reported',
-      guidance: 'affected systems, suspicious account names, timestamps, visible alerts, and whether data may have been accessed',
+      guidance:
+        'affected systems, suspicious account names, timestamps, visible alerts, and whether data may have been accessed',
       suggestedResponse:
         'Treat this as urgent. Preserve evidence, avoid changing affected accounts until reviewed, and include systems, timestamps, account names, and visible alerts for Security.',
-      reasoning: 'Mock AI detected security incident language such as breach, suspicious activity, phishing, or malware.',
+      reasoning:
+        'Mock AI detected security incident language such as breach, suspicious activity, phishing, or malware.',
       referenceId: 'kb-phishing',
     };
   }
@@ -623,7 +720,8 @@ function classifyDemoTicketText(text: string) {
       category: categories[3]!,
       priority: 'MEDIUM' as const,
       title: 'Payroll or finance question',
-      guidance: 'payroll period, affected amount or document, approval reference, and whether sensitive details should stay private',
+      guidance:
+        'payroll period, affected amount or document, approval reference, and whether sensitive details should stay private',
       suggestedResponse:
         'Finance should review the payroll period, deduction or reimbursement details, and keep sensitive payroll information in private notes.',
       reasoning: 'Mock AI detected payroll, invoice, expense, or reimbursement language.',
@@ -635,10 +733,12 @@ function classifyDemoTicketText(text: string) {
       category: categories[4]!,
       priority: 'LOW' as const,
       title: 'Facilities support request',
-      guidance: 'office location, room or door number, time observed, and whether workplace access is blocked',
+      guidance:
+        'office location, room or door number, time observed, and whether workplace access is blocked',
       suggestedResponse:
         'Facilities should confirm the location, room or door identifier, time observed, and whether the issue blocks workplace access.',
-      reasoning: 'Mock AI detected facilities language such as badge, room, door, printer, desk, or display.',
+      reasoning:
+        'Mock AI detected facilities language such as badge, room, door, printer, desk, or display.',
       referenceId: null,
     };
   }
@@ -647,7 +747,8 @@ function classifyDemoTicketText(text: string) {
       category: categories[2]!,
       priority: 'LOW' as const,
       title: 'HR policy or onboarding question',
-      guidance: 'policy area, relevant dates, manager approval, and any required employee documentation',
+      guidance:
+        'policy area, relevant dates, manager approval, and any required employee documentation',
       suggestedResponse:
         'HR should confirm the policy area, relevant dates, and whether manager approval or employee documentation is required.',
       reasoning: 'Mock AI detected HR policy, benefits, leave, or onboarding language.',
@@ -659,10 +760,12 @@ function classifyDemoTicketText(text: string) {
       category: categories[6]!,
       priority: 'HIGH' as const,
       title: 'Hardware support request',
-      guidance: 'device type, urgency, location, manager approval, and whether the employee has a working backup',
+      guidance:
+        'device type, urgency, location, manager approval, and whether the employee has a working backup',
       suggestedResponse:
         'Support should confirm device type, urgency, manager approval, and whether the employee has a working backup.',
-      reasoning: 'Mock AI detected hardware request language such as laptop, monitor, battery, dock, or headset.',
+      reasoning:
+        'Mock AI detected hardware request language such as laptop, monitor, battery, dock, or headset.',
       referenceId: null,
     };
   }
@@ -671,7 +774,8 @@ function classifyDemoTicketText(text: string) {
       category: categories[0]!,
       priority: 'HIGH' as const,
       title: 'VPN or network access issue',
-      guidance: 'VPN or network error message, device type, location, and whether other internal tools are affected',
+      guidance:
+        'VPN or network error message, device type, location, and whether other internal tools are affected',
       suggestedResponse:
         'Support should confirm the VPN or network error, device type, location, and whether other internal tools are affected.',
       reasoning: 'Mock AI detected VPN, Wi-Fi, internet, or network access language.',
@@ -686,7 +790,8 @@ function classifyDemoTicketText(text: string) {
       guidance: 'application name, approval status, access duration, and business reason',
       suggestedResponse:
         'Support should confirm the application, approval status, access duration, and business reason before changing permissions.',
-      reasoning: 'Mock AI detected account, password, license, folder, mailbox, or access language.',
+      reasoning:
+        'Mock AI detected account, password, license, folder, mailbox, or access language.',
       referenceId: 'kb-mfa',
     };
   }
@@ -695,10 +800,12 @@ function classifyDemoTicketText(text: string) {
       category: categories[7]!,
       priority: 'HIGH' as const,
       title: 'Internal API or application outage',
-      guidance: 'affected API or application, endpoint, error message or status code, start time, scope, and business impact',
+      guidance:
+        'affected API or application, endpoint, error message or status code, start time, scope, and business impact',
       suggestedResponse:
         'Operations should confirm the affected API or application, endpoint, error code, start time, scope, and business impact.',
-      reasoning: 'Mock AI detected internal API, app, service, endpoint, outage, or system-not-working language.',
+      reasoning:
+        'Mock AI detected internal API, app, service, endpoint, outage, or system-not-working language.',
       referenceId: 'kb-api-outage',
     };
   }
@@ -749,23 +856,29 @@ function improveDemoDraft(title: string, description: string): TicketDraftSugges
 
 function demoAnalytics(): DashboardAnalytics {
   const now = Date.now();
-  const openTickets = demoTickets.filter((ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status));
-  const acceptedAi = demoTickets.flatMap((ticket) => ticket.aiSuggestions ?? []).filter((suggestion) =>
-    ['APPROVED', 'EDITED'].includes(suggestion.status),
+  const openTickets = demoTickets.filter(
+    (ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status),
   );
+  const acceptedAi = demoTickets
+    .flatMap((ticket) => ticket.aiSuggestions ?? [])
+    .filter((suggestion) => ['APPROVED', 'EDITED'].includes(suggestion.status));
   const allAi = demoTickets.flatMap((ticket) => ticket.aiSuggestions ?? []);
 
   return {
     openTickets: openTickets.length,
     unassignedTickets: demoTickets.filter((ticket) => !ticket.assignedAgent).length,
     atRiskTickets: openTickets.filter((ticket) => {
-      const minutesLeft = ticket.slaDeadlineAt ? (new Date(ticket.slaDeadlineAt).getTime() - now) / 60_000 : Infinity;
+      const minutesLeft = ticket.slaDeadlineAt
+        ? (new Date(ticket.slaDeadlineAt).getTime() - now) / 60_000
+        : Infinity;
       return minutesLeft > 0 && minutesLeft <= 90;
     }).length,
     overdueTickets: openTickets.filter(
       (ticket) => ticket.slaDeadlineAt && new Date(ticket.slaDeadlineAt).getTime() < now,
     ).length,
-    ticketsByCategory: countBy(demoTickets.map((ticket) => ticket.category?.name ?? 'Uncategorized')),
+    ticketsByCategory: countBy(
+      demoTickets.map((ticket) => ticket.category?.name ?? 'Uncategorized'),
+    ),
     ticketsByPriority: countBy(demoTickets.map((ticket) => ticket.priority)),
     ticketsByStatus: countBy(demoTickets.map((ticket) => ticket.status)),
     averageResponseMinutes: 42,
@@ -775,10 +888,14 @@ function demoAnalytics(): DashboardAnalytics {
       openTickets.map((ticket) => ticket.assignedAgent?.fullName ?? 'Unassigned'),
     ),
     recurringIssueTrends: countBy(
-      demoTickets.map((ticket) => ticket.aiSummary?.split(' ').slice(0, 3).join(' ') ?? ticket.title),
+      demoTickets.map(
+        (ticket) => ticket.aiSummary?.split(' ').slice(0, 3).join(' ') ?? ticket.title,
+      ),
     ).slice(0, 6),
     employeeSatisfaction: 4.6,
-    aiSuggestionAcceptanceRate: allAi.length ? Math.round((acceptedAi.length / allAi.length) * 100) : 78,
+    aiSuggestionAcceptanceRate: allAi.length
+      ? Math.round((acceptedAi.length / allAi.length) * 100)
+      : 78,
   };
 }
 
@@ -818,10 +935,21 @@ export const api = {
     if (isDemoToken(token)) {
       const params = new URLSearchParams(query.replace(/^\?/, ''));
       const search = params.get('search')?.toLowerCase();
-      const visibleTickets =
+      const assignment = params.get('assignment') ?? 'all';
+      let visibleTickets =
         currentDemoUser.role === 'employee'
           ? demoTickets.filter((ticket) => ticket.reporter?.id === currentDemoUser.id)
           : demoTickets;
+      if (currentDemoUser.role !== 'employee' && assignment === 'available') {
+        visibleTickets = visibleTickets.filter(
+          (ticket) => !ticket.assignedAgent && !['RESOLVED', 'CLOSED'].includes(ticket.status),
+        );
+      }
+      if (currentDemoUser.role !== 'employee' && assignment === 'mine') {
+        visibleTickets = visibleTickets.filter(
+          (ticket) => ticket.assignedAgent?.id === currentDemoUser.id,
+        );
+      }
       const items = search
         ? visibleTickets.filter((ticket) =>
             `${ticket.number} ${ticket.title} ${ticket.description}`.toLowerCase().includes(search),
@@ -834,7 +962,8 @@ export const api = {
   createTicket(token: string, body: { title: string; description: string; categoryId?: string }) {
     if (isDemoToken(token)) {
       const classification = classifyDemoTicketText(`${body.title} ${body.description}`);
-      const category = categories.find((item) => item.id === body.categoryId) ?? classification.category;
+      const category =
+        categories.find((item) => item.id === body.categoryId) ?? classification.category;
       const reference = classification.referenceId
         ? knowledge.find((item) => item.id === classification.referenceId)
         : undefined;
@@ -924,13 +1053,28 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
-  getTicket(token: string, id: string) {
+  getTicket(token: string, id: string): Promise<Ticket> {
     if (isDemoToken(token)) {
-      return Promise.resolve(findDemoTicket(id));
+      const ticket = findDemoTicket(id);
+      return Promise.resolve(
+        currentDemoUser.role === 'employee'
+          ? {
+              ...ticket,
+              comments: (ticket.comments ?? []).filter(
+                (comment) => comment.visibility === 'PUBLIC',
+              ),
+            }
+          : ticket,
+      );
     }
     return request<Ticket>(`/tickets/${id}`, { token });
   },
-  addComment(token: string, id: string, body: string, visibility: 'PUBLIC' | 'INTERNAL' = 'PUBLIC') {
+  addComment(
+    token: string,
+    id: string,
+    body: string,
+    visibility: 'PUBLIC' | 'INTERNAL' = 'PUBLIC',
+  ) {
     if (isDemoToken(token)) {
       const ticket = findDemoTicket(id);
       const comment = {
@@ -981,14 +1125,84 @@ export const api = {
     if (isDemoToken(token)) {
       const ticket = findDemoTicket(id);
       const agent = demoUsers.find((user) => user.user.id === agentId)?.user ?? demoUsers[1]!.user;
+      const assignedAt = new Date().toISOString();
       ticket.assignedAgent = { id: agent.id, fullName: agent.fullName, email: agent.email };
       ticket.status = 'ASSIGNED';
+      ticket.assignments = [
+        {
+          id: createId('assignment'),
+          assignedAt,
+          unassignedAt: null,
+          agent: { id: agent.id, fullName: agent.fullName, role: { slug: agent.role } },
+        },
+        ...(ticket.assignments ?? []),
+      ];
       return Promise.resolve(ticket);
     }
     return request<Ticket>(`/tickets/${id}/assign`, {
       token,
       method: 'POST',
       body: JSON.stringify({ agentId }),
+    });
+  },
+  claimTicket(token: string, id: string) {
+    if (isDemoToken(token)) {
+      if (currentDemoUser.role === 'employee') {
+        return Promise.reject(new Error('Only support team members can take tickets.'));
+      }
+
+      const ticket = findDemoTicket(id);
+      if (['RESOLVED', 'CLOSED'].includes(ticket.status)) {
+        return Promise.reject(new Error('Resolved or closed tickets cannot be claimed.'));
+      }
+      if (ticket.assignedAgent?.id === currentDemoUser.id) {
+        return Promise.resolve(ticket);
+      }
+      if (ticket.assignedAgent) {
+        return Promise.reject(
+          new Error(`This ticket is already assigned to ${ticket.assignedAgent.fullName}.`),
+        );
+      }
+
+      const previousStatus = ticket.status;
+      const assignedAt = new Date().toISOString();
+      ticket.assignedAgent = {
+        id: currentDemoUser.id,
+        fullName: currentDemoUser.fullName,
+        email: currentDemoUser.email,
+      };
+      if (['NEW', 'TRIAGED', 'REOPENED'].includes(ticket.status)) {
+        ticket.status = 'ASSIGNED';
+      }
+      ticket.assignments = [
+        {
+          id: createId('assignment'),
+          assignedAt,
+          unassignedAt: null,
+          agent: {
+            id: currentDemoUser.id,
+            fullName: currentDemoUser.fullName,
+            role: { slug: currentDemoUser.role },
+          },
+        },
+        ...(ticket.assignments ?? []),
+      ];
+      ticket.statusHistory = [
+        ...(ticket.statusHistory ?? []),
+        {
+          id: createId('history'),
+          previousStatus,
+          newStatus: ticket.status,
+          reason: `${currentDemoUser.fullName} took ownership of this ticket`,
+          changedAt: assignedAt,
+          changedBy: { id: currentDemoUser.id, fullName: currentDemoUser.fullName },
+        },
+      ];
+      return Promise.resolve(ticket);
+    }
+    return request<Ticket>(`/tickets/${id}/claim`, {
+      token,
+      method: 'POST',
     });
   },
   approveAiSuggestion(token: string, ticketId: string, suggestionId: string, body?: string) {
@@ -1018,7 +1232,9 @@ export const api = {
       return Promise.resolve(
         knowledge.filter((item) =>
           normalizedSearch
-            ? `${item.title} ${item.excerpt}`.toLowerCase().includes(normalizedSearch.split(' ')[0] ?? '')
+            ? `${item.title} ${item.excerpt}`
+                .toLowerCase()
+                .includes(normalizedSearch.split(' ')[0] ?? '')
             : true,
         ),
       );

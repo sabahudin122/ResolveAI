@@ -38,6 +38,12 @@ export type Ticket = {
   createdAt: string;
   reporter?: { id: string; fullName: string; email?: string };
   assignedAgent?: { id: string; fullName: string; email?: string } | null;
+  assignments?: Array<{
+    id: string;
+    assignedAt: string;
+    unassignedAt?: string | null;
+    agent: { id: string; fullName: string; role?: { slug: RoleSlug } };
+  }>;
   category?: { id: string; name: string } | null;
   department?: { id: string; name: string } | null;
   comments?: Array<{

@@ -3,8 +3,7 @@ export const openApiSpec = {
   info: {
     title: 'OpsPilot API',
     version: '0.1.0',
-    description:
-      'Versioned REST API for the OpsPilot AI-assisted internal operations platform.',
+    description: 'Versioned REST API for the OpsPilot AI-assisted internal operations platform.',
   },
   servers: [{ url: '/api/v1' }],
   security: [{ bearerAuth: [] }],
@@ -51,6 +50,11 @@ export const openApiSpec = {
     '/tickets/{id}/assign': {
       post: {
         summary: 'Assign a ticket to a support agent',
+      },
+    },
+    '/tickets/{id}/claim': {
+      post: {
+        summary: 'Claim an available ticket for the authenticated support team member',
       },
     },
     '/knowledge': {

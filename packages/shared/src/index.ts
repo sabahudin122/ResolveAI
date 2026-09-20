@@ -12,10 +12,12 @@ export const ticketStatuses = [
   'REOPENED',
 ] as const;
 export const priorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
+export const ticketQueues = ['all', 'available', 'mine'] as const;
 
 export type RoleSlug = (typeof roleSlugs)[number];
 export type TicketStatus = (typeof ticketStatuses)[number];
 export type Priority = (typeof priorities)[number];
+export type TicketQueue = (typeof ticketQueues)[number];
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -32,6 +34,7 @@ export const createTicketSchema = z.object({
 export const ticketFilterSchema = z.object({
   status: z.enum(ticketStatuses).optional(),
   priority: z.enum(priorities).optional(),
+  assignment: z.enum(ticketQueues).default('all'),
   search: z.string().max(120).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
